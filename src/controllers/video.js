@@ -5,12 +5,21 @@ const { pipeline } = require("stream/promises");
 const util = require("../../lib/util");
 const db = require("../DB.js");
 const ff = require("../../lib/ff");
+const { measureMemory } = require("vm");
 
 const uploadVideo = async (req, res, handleErr) => {
   const fileName = req.headers.filename;
   const extension = path.extname(fileName).substring().toLowerCase();
   const name = path.parse(fileName).name;
   const videoId = crypto.randomBytes(4).toString("hex");
+  const FORMAT_SUPPORTED = [".mov", ".mp4"];
+
+  if (FORMAT_SUPPORTED.indexOf(extension) == -1) {
+    return handleErr({
+      status: 400,
+      message: `Only these formats are allowed: ${FORMAT_SUPPORTED.join(", ")}`,
+    });
+  }
   try {
     await fs.mkdir(`./storage/${videoId}`);
     const fullPath = `./storage/${videoId}/original${extension}`;
@@ -33,7 +42,7 @@ const uploadVideo = async (req, res, handleErr) => {
       resizes: dimensions,
     });
     db.save();
-    res.status(200).json({
+    res.status(201).json({
       status: "success",
       videoId,
       message: "Video uploaded successfully",
