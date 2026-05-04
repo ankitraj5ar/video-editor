@@ -5,8 +5,17 @@ const { pipeline } = require("stream/promises");
 const util = require("../../lib/util");
 const db = require("../DB.js");
 const ff = require("../../lib/ff");
-const { measureMemory } = require("vm");
 
+// return all the uploaded video by user
+const getVideos = (req, res, handleErr) => {
+  db.update();
+  const videos = db.videos.filter((video) => {
+    return video.userId === req.userId;
+  });
+  return res.status(200).json(videos);
+};
+
+// upload a video file
 const uploadVideo = async (req, res, handleErr) => {
   const fileName = req.headers.filename;
   const extension = path.extname(fileName).substring().toLowerCase();
@@ -39,7 +48,7 @@ const uploadVideo = async (req, res, handleErr) => {
       extension,
       userId: req.userId,
       extractedAudio: false,
-      resizes: dimensions,
+      dimensions,
     });
     db.save();
     res.status(201).json({
@@ -58,5 +67,6 @@ const uploadVideo = async (req, res, handleErr) => {
 
 const controller = {
   uploadVideo,
+  getVideos,
 };
 module.exports = controller;
