@@ -15,6 +15,68 @@ const getVideos = (req, res, handleErr) => {
   return res.status(200).json(videos);
 };
 
+// return video asset to client
+const getVideoAsset = async (req, res, handleErr) => {
+  const videoId = req.params.get("videoId");
+  const type = req.params.get("type");
+  db.update();
+  const isVideoAvailable = db.videos.find((video) => video.videoId === videoId);
+  if (!isVideoAvailable) {
+    return handleErr({
+      status: 404,
+      message: "Video not found!",
+    });
+  }
+  let file;
+  let mimeType;
+  let fileName;
+
+  switch (type) {
+    case "thumbnail":
+      file = await fs.open(`./storage/${videoId}/thumbnail.jpg`, "r");
+      mimeType = "image/jpeg";
+      break;
+    case "original":
+      file = await fs.open(
+        `./storage/${videoId}/original${isVideoAvailable.extension}`,
+        "r",
+      );
+      mimeType = "video/mp4";
+      fileName = `${isVideoAvailable.name}${isVideoAvailable.extension}`;
+      break;
+    case "audio":
+      file = await fs.open(`./storage/${videoId}/audio.aac`, "r");
+      mimeType = "audio/aac";
+      fileName = `${isVideoAvailable.name}-audio.aac`;
+      break;
+    case "resize":
+      const dimensions = req.params.get("dimensions");
+      file = await fs.open(
+        `./storage/${videoId}/${dimensions}${isVideoAvailable.extension}`,
+        "r",
+      );
+      mimeType = "video/mp4";
+      fileName = `${isVideoAvailable.name}-${dimensions}${isVideoAvailable.extension}`;
+      break;
+  }
+
+  try {
+    const stat = await file.stat();
+    const fileStream = file.createReadStream();
+    if (type != "thumbnail") {
+      res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+    }
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Content-Length", stat.size);
+    res.status(200);
+    await pipeline(fileStream, res);
+
+    file.close();
+  } catch (error) {
+    console.log(error);
+  }
+};
+
 // upload a video file
 const uploadVideo = async (req, res, handleErr) => {
   const fileName = req.headers.filename;
@@ -68,5 +130,6 @@ const uploadVideo = async (req, res, handleErr) => {
 const controller = {
   uploadVideo,
   getVideos,
+  getVideoAsset,
 };
 module.exports = controller;
