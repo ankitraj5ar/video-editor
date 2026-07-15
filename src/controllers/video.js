@@ -15,6 +15,71 @@ const getVideos = (req, res, handleErr) => {
   return res.status(200).json(videos);
 };
 
+// extract the audio for video file
+const extractAudio = async (req, res, handleErr) => {
+  const videoId = req.params.get("videoId");
+  db.update();
+  const video = db.videos.find((video) => {
+    return video.videoId === videoId;
+  });
+  if (video.extractedAudio) {
+    return handleErr({
+      status: 400,
+      message: "The audio has been already extracted for this video",
+    });
+  }
+  const originalVideoPath = `./storage/${videoId}/original${video.extension}`;
+  const targetAudioPath = `./storage/${videoId}/audio.aac`;
+  try {
+    await ff.extractAudio(originalVideoPath, targetAudioPath);
+
+    video.extractedAudio = true;
+    db.save();
+    return res.status(200).json({
+      status: "success",
+      message: "The audio was extracted successfully.",
+    });
+  } catch (error) {
+    util.deleteFile(targetAudioPath);
+    return handleErr(error);
+  }
+};
+
+// resize a video file and create a new video file
+const resizeVideo = async (req, res, handleErr) => {
+  const videoId = req.body.videoId;
+  const width = Number(req.body.width);
+  const height = Number(req.body.height);
+  db.update();
+  const video = db.videos.find((video) => {
+    return video.videoId === videoId;
+  });
+
+  if (!video) {
+    return handleErr({
+      status: 400,
+      message: "The video not found",
+    });
+  }
+  const originalVideoPath = `./storage/${videoId}/original${video.extension}`;
+  const targetVideoPath = `./storage/${videoId}/${width}x${height}${video.extension}`;
+  console.log("original", originalVideoPath, "target", targetVideoPath);
+  try {
+    video.resizes[`${width}x${height}`] = { processing: true };
+    await ff.resize(originalVideoPath, targetVideoPath, width, height);
+    video.resizes[`${width}x${height}`].processing = false;
+    db.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "The video is now being processed.",
+    });
+  } catch (error) {
+    util.deleteFile(targetVideoPath);
+    return handleErr(error);
+  }
+};
+
 // return video asset to client
 const getVideoAsset = async (req, res, handleErr) => {
   const videoId = req.params.get("videoId");
@@ -111,6 +176,7 @@ const uploadVideo = async (req, res, handleErr) => {
       userId: req.userId,
       extractedAudio: false,
       dimensions,
+      resizes: {},
     });
     db.save();
     res.status(201).json({
@@ -131,5 +197,7 @@ const controller = {
   uploadVideo,
   getVideos,
   getVideoAsset,
+  extractAudio,
+  resizeVideo,
 };
 module.exports = controller;
