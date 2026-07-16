@@ -5,6 +5,8 @@ const { pipeline } = require("stream/promises");
 const util = require("../../lib/util");
 const db = require("../DB.js");
 const ff = require("../../lib/ff");
+const jobQueue = require("../../lib/JobQueue");
+const jobs = new jobQueue();
 
 // return all the uploaded video by user
 const getVideos = (req, res, handleErr) => {
@@ -61,21 +63,22 @@ const resizeVideo = async (req, res, handleErr) => {
       message: "The video not found",
     });
   }
-  const originalVideoPath = `./storage/${videoId}/original${video.extension}`;
-  const targetVideoPath = `./storage/${videoId}/${width}x${height}${video.extension}`;
-  console.log("original", originalVideoPath, "target", targetVideoPath);
   try {
     video.resizes[`${width}x${height}`] = { processing: true };
-    await ff.resize(originalVideoPath, targetVideoPath, width, height);
-    video.resizes[`${width}x${height}`].processing = false;
     db.save();
+
+    jobs.enqueue({
+      type: "resize",
+      videoId,
+      width,
+      height,
+    });
 
     return res.status(200).json({
       status: "success",
       message: "The video is now being processed.",
     });
   } catch (error) {
-    util.deleteFile(targetVideoPath);
     return handleErr(error);
   }
 };
